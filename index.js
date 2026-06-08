@@ -2,7 +2,7 @@ const dns = require("node:dns");
 dns.setServers(["8.8.8.8", "8.8.4.4"]);
 const express = require('express');
 const dotenv = require('dotenv');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors');
 
 dotenv.config();
@@ -27,17 +27,26 @@ async function run() {
         // Connect the client to the server	(optional starting in v4.7)
         await client.connect();
         const db = client.db("ideahub");
-        const ideascollection = db.collection('startupIdeas');
+        const ideascollection = db.collection("startupIdeas");
+
+        app.get('/ideas', async (req, res) => {
+            const result = await ideascollection.find().toArray();
+            console.log(result);
+            res.json(result);
+        })
 
         app.post('/ideas', async (req, res) => {
             const ideasData = req.body;
-            const result = await ideascollection.insertOne("ideasData");
-            res.send(result)
+            const result = await ideascollection.insertOne(ideasData);
+            res.json(result);
         })
-        app.get('/ideas', async (req, res) => {
-            const result = await ideascollection.find();
-            res.send(result)
+
+        app.get('/ideas/:id', async (req, res) => {
+            const { id } = req.params;
+            const result = await ideascollection.findOne({ _id: new ObjectId(id), });
+            res.json(result);
         })
+
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
