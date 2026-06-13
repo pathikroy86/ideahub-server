@@ -57,7 +57,33 @@ async function run() {
         await client.connect();
         const db = client.db("ideahub");
         const ideascollection = db.collection("startupIdeas");
-        const myIdeasCollection = db.collection("myIdeas");
+        const commentsCollection = db.collection("comments");
+
+        const updateIdea = async (req, res) => {
+            const { id } = req.params;
+            const userId = getLoggedInUserId(req);
+            const updatedIdea = {
+                ...req.body,
+                updatedAt: new Date(),
+            };
+
+            delete updatedIdea._id;
+            delete updatedIdea.userId;
+            delete updatedIdea.userEmail;
+            delete updatedIdea.userName;
+            delete updatedIdea.createdAt;
+
+            const result = await ideascollection.updateOne(
+                { _id: new ObjectId(id), userId: userId },
+                { $set: updatedIdea }
+            );
+
+            if (result.matchedCount === 0) {
+                return res.status(404).json({ message: "Idea not found" });
+            }
+
+            res.json(result);
+        };
 
         app.get('/ideas', verifyToken, async (req, res) => {
             const result = await ideascollection.find().toArray();
@@ -82,31 +108,9 @@ async function run() {
             res.json(result);
         })
 
-        app.put('/ideas/:id', verifyToken, async (req, res) => {
-            const { id } = req.params;
-            const userId = getLoggedInUserId(req);
-            const updatedIdea = {
-                ...req.body,
-                updatedAt: new Date(),
-            };
+        app.patch('/ideas/:id', verifyToken, updateIdea)
 
-            delete updatedIdea._id;
-            delete updatedIdea.userId;
-            delete updatedIdea.userEmail;
-            delete updatedIdea.userName;
-            delete updatedIdea.createdAt;
-
-            const result = await ideascollection.updateOne(
-                { _id: new ObjectId(id), userId: userId },
-                { $set: updatedIdea }
-            );
-
-            if (result.matchedCount === 0) {
-                return res.status(404).json({ message: "Idea not found" });
-            }
-
-            res.json(result);
-        })
+        app.put('/ideas/:id', verifyToken, updateIdea)
 
         app.delete('/ideas/:id', verifyToken, async (req, res) => {
             const { id } = req.params;
@@ -135,9 +139,76 @@ async function run() {
             res.json(result);
         })
 
-        app.post('/myideas', async (req, res) => {
-            const myideasData = req.body;
-            const result = await myIdeasCollection.insertOne(myideasData);
+        app.get('/ideas/:id/comments', verifyToken, async (req, res) => {
+            const { id } = req.params;
+            const result = await commentsCollection
+                .find({ ideaId: id })
+                .sort({ createdAt: -1 })
+                .toArray();
+
+            res.json(result);
+        })
+
+        app.post('/ideas/:id/comments', verifyToken, async (req, res) => {
+            const { id } = req.params;
+            const text = req.body.text;
+
+            if (!text) {
+                return res.status(400).json({ message: "Comment text is required" });
+            }
+
+            const commentData = {
+                ideaId: id,
+                userId: getLoggedInUserId(req),
+                userName: req.user?.name || "User",
+                text: text,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
+
+            const result = await commentsCollection.insertOne(commentData);
+            res.json(result);
+        })
+
+        app.patch('/comments/:id', verifyToken, async (req, res) => {
+            const { id } = req.params;
+            const userId = getLoggedInUserId(req);
+            const text = req.body.text;
+
+            if (!text) {
+                return res.status(400).json({ message: "Comment text is required" });
+            }
+
+            const result = await commentsCollection.updateOne(
+                { _id: new ObjectId(id), userId: userId },
+                {
+                    $set: {
+                        text: text,
+                        updatedAt: new Date(),
+                    },
+                }
+            );
+
+            if (result.matchedCount === 0) {
+                return res.status(404).json({ message: "Comment not found" });
+            }
+
+            res.json(result);
+        })
+
+        app.delete('/comments/:id', verifyToken, async (req, res) => {
+            const { id } = req.params;
+            const userId = getLoggedInUserId(req);
+
+            const result = await commentsCollection.deleteOne({
+                _id: new ObjectId(id),
+                userId: userId,
+            });
+
+            if (result.deletedCount === 0) {
+                return res.status(404).json({ message: "Comment not found" });
+            }
+
             res.json(result);
         })
 
