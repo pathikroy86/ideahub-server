@@ -86,7 +86,19 @@ async function run() {
         };
 
         app.get('/ideas', verifyToken, async (req, res) => {
-            const result = await ideascollection.find().toArray();
+            const search = req.query.search;
+            let query = {};
+
+            if (search) {
+                query = {
+                    title: {
+                        $regex: search,
+                        $options: "i",
+                    },
+                };
+            }
+
+            const result = await ideascollection.find(query).toArray();
             res.json(result);
         })
 
@@ -150,47 +162,28 @@ async function run() {
                 .sort({ createdAt: -1 })
                 .toArray();
 
-            const ideaIds = [];
-
-            for (const comment of comments) {
-                if (!ideaIds.includes(comment.ideaId)) {
-                    ideaIds.push(comment.ideaId);
-                }
-            }
-
-            const objectIds = [];
-
-            for (const ideaId of ideaIds) {
-                if (ObjectId.isValid(ideaId)) {
-                    objectIds.push(new ObjectId(ideaId));
-                }
-            }
-
-            const ideas = await ideascollection
-                .find({ _id: { $in: objectIds } })
-                .toArray();
-
             const commentedIdeas = [];
 
-            for (const idea of ideas) {
-                let commentCount = 0;
-                let lastComment = null;
+            for (const comment of comments) {
+                let alreadyAdded = false;
 
-                for (const comment of comments) {
-                    if (comment.ideaId === idea._id.toString()) {
-                        commentCount = commentCount + 1;
-
-                        if (!lastComment) {
-                            lastComment = comment;
-                        }
+                for (const idea of commentedIdeas) {
+                    if (idea._id.toString() === comment.ideaId) {
+                        alreadyAdded = true;
                     }
                 }
 
-                commentedIdeas.push({
-                    ...idea,
-                    commentCount: commentCount,
-                    lastComment: lastComment,
-                });
+                if (alreadyAdded === false && ObjectId.isValid(comment.ideaId)) {
+                    const idea = await ideascollection.findOne({
+                        _id: new ObjectId(comment.ideaId),
+                    });
+
+                    if (idea) {
+                        idea.myComment = comment.text;
+                        idea.commentDate = comment.createdAt;
+                        commentedIdeas.push(idea);
+                    }
+                }
             }
 
             res.json(commentedIdeas);
