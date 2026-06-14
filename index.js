@@ -87,15 +87,18 @@ async function run() {
 
         app.get('/ideas', verifyToken, async (req, res) => {
             const search = req.query.search;
+            const category = req.query.category;
             let query = {};
 
             if (search) {
-                query = {
-                    title: {
-                        $regex: search,
-                        $options: "i",
-                    },
+                query.title = {
+                    $regex: search,
+                    $options: "i",
                 };
+            }
+
+            if (category) {
+                query.category = category;
             }
 
             const result = await ideascollection.find(query).toArray();
