@@ -110,8 +110,6 @@ async function run() {
 
         app.patch('/ideas/:id', verifyToken, updateIdea)
 
-        app.put('/ideas/:id', verifyToken, updateIdea)
-
         app.delete('/ideas/:id', verifyToken, async (req, res) => {
             const { id } = req.params;
             const userId = getLoggedInUserId(req);
@@ -137,6 +135,65 @@ async function run() {
 
             const result = await ideascollection.find({ userId: userId }).toArray();
             res.json(result);
+        })
+
+        app.get('/my-interactions/:userId', verifyToken, async (req, res) => {
+            const { userId } = req.params;
+            const loggedInUserId = getLoggedInUserId(req);
+
+            if (userId !== loggedInUserId) {
+                return res.status(403).json({ message: "Forbidden" });
+            }
+
+            const comments = await commentsCollection
+                .find({ userId: userId })
+                .sort({ createdAt: -1 })
+                .toArray();
+
+            const ideaIds = [];
+
+            for (const comment of comments) {
+                if (!ideaIds.includes(comment.ideaId)) {
+                    ideaIds.push(comment.ideaId);
+                }
+            }
+
+            const objectIds = [];
+
+            for (const ideaId of ideaIds) {
+                if (ObjectId.isValid(ideaId)) {
+                    objectIds.push(new ObjectId(ideaId));
+                }
+            }
+
+            const ideas = await ideascollection
+                .find({ _id: { $in: objectIds } })
+                .toArray();
+
+            const commentedIdeas = [];
+
+            for (const idea of ideas) {
+                let commentCount = 0;
+                let lastComment = null;
+
+                for (const comment of comments) {
+                    if (comment.ideaId === idea._id.toString()) {
+                        commentCount = commentCount + 1;
+
+                        if (!lastComment) {
+                            lastComment = comment;
+                        }
+                    }
+                }
+
+                commentedIdeas.push({
+                    ...idea,
+                    commentCount: commentCount,
+                    lastComment: lastComment,
+                });
+            }
+
+            res.json(commentedIdeas);
         })
 
         app.get('/ideas/:id/comments', verifyToken, async (req, res) => {
