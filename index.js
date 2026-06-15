@@ -58,6 +58,7 @@ async function run() {
         const db = client.db("ideahub");
         const ideascollection = db.collection("startupIdeas");
         const commentsCollection = db.collection("comments");
+        const newsletterCollection = db.collection("newsletter");
 
         const updateIdea = async (req, res) => {
             const { id } = req.params;
@@ -85,7 +86,7 @@ async function run() {
             res.json(result);
         };
 
-        app.get('/ideas', verifyToken, async (req, res) => {
+        app.get('/ideas', async (req, res) => {
             const search = req.query.search;
             const category = req.query.category;
             let query = {};
@@ -114,6 +115,22 @@ async function run() {
                 createdAt: new Date(),
             };
             const result = await ideascollection.insertOne(ideasData);
+            res.json(result);
+        })
+
+        app.post('/newsletter', async (req, res) => {
+            const email = req.body.email;
+
+            if (!email) {
+                return res.status(400).json({ message: "Email is required" });
+            }
+
+            const subscriber = {
+                email: email,
+                createdAt: new Date(),
+            };
+
+            const result = await newsletterCollection.insertOne(subscriber);
             res.json(result);
         })
 
